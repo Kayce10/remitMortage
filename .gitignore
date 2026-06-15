@@ -30,5 +30,10 @@ yarn-error.log*
 # TypeScript
 *.tsbuildinfo
 
+# Rust / Soroban
+target/
+*.wasm
+*.d
+
 # Misc
 *.pem
