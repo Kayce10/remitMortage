@@ -42,6 +42,7 @@ app.use(errorHandler);
 // ── Start Server ────────────────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`🚀 RemitMortgage API running on http://localhost:${PORT}`);
+  startNotificationScheduler();
 });
 
 export default app;
