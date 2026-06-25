@@ -30,4 +30,6 @@ pub enum EscrowError {
     GracePeriodActive = 12,
     /// The borrower is not in default and cannot be forcibly removed.
     BorrowerNotInDefault = 13,
+    /// Minimum savings lockup period has not elapsed yet.
+    LockupNotMet = 10,
 }
