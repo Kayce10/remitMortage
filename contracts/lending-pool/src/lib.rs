@@ -636,6 +636,69 @@ impl LendingPoolContract {
         Ok(())
     }
 
+    /// Refund disputed milestone funds back to the pool.
+    ///
+    /// Called by the milestone contract when a milestone is disputed.
+    /// Reverses the disbursement by reducing the loan's disbursed amount and
+    /// outstanding debt, and returns funds to the pool's available liquidity.
+    ///
+    /// Only the admin (or milestone contract as authorized caller) can invoke this.
+    pub fn refund_milestone_dispute(
+        env: Env,
+        loan_id: BytesN<32>,
+        amount: i128,
+    ) -> Result<(), PoolError> {
+        Self::check_not_paused(&env)?;
+        
+        if amount <= 0 {
+            return Err(PoolError::InvalidAmount);
+        }
+
+        let config = Self::read_config(&env)?;
+        config.admin.require_auth();
+
+        let mut loan = Self::read_loan(&env, &loan_id)?;
+
+        if loan.status != LoanStatus::Approved {
+            return Err(PoolError::InvalidLoanState);
+        }
+
+        // Cannot refund more than what has been disbursed.
+        if amount > loan.disbursed {
+            return Err(PoolError::RefundExceedsDisbursed);
+        }
+
+        // Reverse the disbursement.
+        loan.disbursed = loan.disbursed.saturating_sub(amount);
+        loan.outstanding_debt = loan.outstanding_debt.saturating_sub(amount);
+        Self::set_loan(&env, &loan_id, &loan);
+
+        // Return funds to available liquidity.
+        let liquidity = Self::read_total_liquidity(&env);
+        let new_liquidity = liquidity.saturating_add(amount);
+        env.storage()
+            .instance()
+            .set(&DataKey::TotalLiquidity, &new_liquidity);
+
+        // Restore active loan commitments (funds are back to available).
+        let active_commitments = Self::read_active_commitments(&env);
+        let restored_commitments = active_commitments.saturating_add(amount);
+        env.storage()
+            .instance()
+            .set(&DataKey::ActiveLoanCommitments, &restored_commitments);
+
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+
+        env.events().publish(
+            (symbol_short!("refund"),),
+            (loan_id.clone(), amount),
+        );
+
+        Ok(())
+    }
+
     /// Borrower repays toward an approved loan.
     ///
     /// Transfers USDC from the borrower to the pool. The repayment amount is split
