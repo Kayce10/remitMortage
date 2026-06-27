@@ -8,6 +8,7 @@ import {
   getPoolLiquidity,
   DEFAULT_GOAL_ID,
 } from "../services/soroban.js";
+import { getApplicant } from "../services/db.js";
 
 export const borrowerRouter = Router();
 
@@ -104,6 +105,17 @@ borrowerRouter.get("/:address/status", validateBorrowerParams, async (req, res) 
     const deposited = borrower?.deposited ?? "0";
     const target = borrower?.target_amount ?? escrowConfig?.savings_target ?? "0";
     const progress = computeProgress(deposited, target);
+    const address = Array.isArray(req.params.address)
+      ? req.params.address[0]
+      : req.params.address;
+
+    const applicant = await getApplicant(address).catch((err) => {
+      console.error("DB read error (non-fatal):", err);
+      return null;
+    });
+
+    const latestVerification = applicant?.verificationResults[0] ?? null;
+    const latestLoan = applicant?.loanApplications[0] ?? null;
 
     return res.json({
       address,
@@ -132,6 +144,26 @@ borrowerRouter.get("/:address/status", validateBorrowerParams, async (req, res) 
       pool: {
         availableLiquidity: liquidity ?? "0",
       },
+      verificationStatus: applicant?.verificationStatus ?? "PENDING",
+      creditScore: applicant?.creditScore ?? null,
+      verification: latestVerification
+        ? {
+            eligible: latestVerification.eligible,
+            totalPayments: latestVerification.totalPayments,
+            totalVolume: latestVerification.totalVolume,
+            spanMonths: latestVerification.spanMonths,
+            reportHash: latestVerification.reportHash,
+            analyzedAt: latestVerification.analyzedAt,
+          }
+        : null,
+      loan: latestLoan
+        ? {
+            status: latestLoan.status,
+            principal: String(latestLoan.principal),
+            escrowContractId: latestLoan.escrowContractId ?? null,
+            loanId: latestLoan.loanId ?? null,
+          }
+        : { status: "none", principal: "0" },
     });
   } catch (error) {
     console.error("Borrower status error:", error);
