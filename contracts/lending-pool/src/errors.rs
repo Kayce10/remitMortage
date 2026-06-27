@@ -41,4 +41,6 @@ pub enum PoolError {
     ApplicantNotVerified = 17,
     /// The daily borrow limit has been exceeded.
     DailyBorrowLimitExceeded = 18,
+    /// Refund amount exceeds the amount disbursed for the loan.
+    RefundExceedsDisbursed = 19,
 }
